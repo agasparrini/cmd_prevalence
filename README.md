@@ -1,1 +1,2 @@
-# cmd_prevalencelocal computer
+# pathway prevalence analysis of curated metagenomic data
+

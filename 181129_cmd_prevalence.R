@@ -1,5 +1,5 @@
 rm(list=ls())  
-setwd("/Users/agasparrini/Documents/Projects/cmd prevalence/")
+setwd("/Users/agasparrini/Documents/Projects/cmd_prevalence_v2/")
 
 # load packages
 library(curatedMetagenomicData)
@@ -8,10 +8,8 @@ library(dplyr)
 library(reshape2)
 library(pheatmap)
 library(ggrepel)
-library(plotly)
 
 # download all stool pathway abundances 
-
 stool_pathabun <- curatedMetagenomicData("*pathabundance_relab.stool*", dryrun = FALSE)
 stool_pathabun_merged <- mergeData(stool_pathabun)
 stool_pathabun_exprs <- exprs(stool_pathabun_merged)
@@ -31,7 +29,7 @@ ggplot(combined_metadata, aes(reorder(study_condition, study_condition, function
   xlab("study condition")
 
 # get control stools
-control_metadata <- filter(combined_metadata, study_condition=="control" && body_site =="stool")
+control_metadata <- filter(combined_metadata, study_condition=="control" & body_site =="stool")
 
 # number of unique control individuals
 length(table(control_metadata$subjectID))
@@ -55,9 +53,49 @@ ggplot(first_control_metadata, aes(reorder(country, country, function(x)-length(
   theme(text = element_text(size=16), axis.text.x = element_text(angle = 60, hjust = 1)) +
   xlab("Country")
 
-ggplot(first_control_metadata, aes(reorder(body_site, body_site, function(x)-length(x)))) +
-  geom_bar() + theme_classic( )
-
 # get western adults 
+filtered_metadata <- filter(first_control_metadata, age_category == "adult" & non_westernized == "no")
 
-filtered_metadata <- filter(first_control_metadata, 
+# technical metadata
+ggplot(filtered_metadata, aes(number_reads)) +
+  geom_histogram() +
+  theme_classic()
+
+ggplot(filtered_metadata, aes(number_bases)) +
+  geom_histogram() +
+  theme_classic()
+
+ggplot(filtered_metadata, aes(DNA_extraction_kit)) +
+  geom_bar() +
+  theme_classic() 
+
+# make dataset of filtered control stool metagenomes
+study_ids <- paste(filtered_metadata$dataset_name, ".pathabundance_relab.stool:", filtered_metadata$sampleID, sep="")
+
+stool_pathabun_exprs <- as.data.frame(stool_pathabun_exprs)
+filtered_pathabun <- select(stool_pathabun_exprs, study_ids)
+
+# remove all (41583) species level annotations 
+filtered_pathabun$PWY <- rownames(filtered_pathabun)
+filtered_pathabun <- select(filtered_pathabun, PWY, everything())
+filtered_pathabun <- filter(filtered_pathabun, !grepl("\\|",filtered_pathabun$PWY))
+
+# make heatmap
+pheatmap(filtered_pathabun[,2:1931], show_rownames = FALSE, show_colnames = FALSE)
+pheatmap(log(filtered_pathabun[,2:1931]+0.00001), show_rownames = FALSE, show_colnames = FALSE)
+pheatmap(filtered_pathabun[,2:1931], breaks=c(0,0.00000001, 0.0027), color = c("red", "black"), show_rownames = FALSE, show_colnames = FALSE)
+
+# compute prevalence
+prevalence <- as.data.frame(rowSums(filtered_pathabun>0)/ncol(filtered_pathabun))
+colnames(prevalence) <- "Prevalence"
+prevalence$Pathway <- filtered_pathabun$PWY 
+prevalence <- select(prevalence, Pathway, Prevalence)
+
+ggplot(prevalence, aes(reorder(Pathway,-Prevalence), Prevalence)) +
+  geom_bar(stat="identity") +
+  theme_classic() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  xlab("Pathway")
+
+

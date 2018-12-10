@@ -83,9 +83,9 @@ filtered_pathabun <- filter(filtered_pathabun, !grepl("\\|",filtered_pathabun$PW
 # make heatmap
 pheatmap(filtered_pathabun[,2:1931], show_rownames = FALSE, show_colnames = FALSE)
 pheatmap(log(filtered_pathabun[,2:1931]+0.00001), show_rownames = FALSE, show_colnames = FALSE)
-pheatmap(filtered_pathabun[,2:1931], breaks=c(0,0.00000001, 0.0027), color = c("red", "black"), show_rownames = FALSE, show_colnames = FALSE)
+pheatmap(filtered_pathabun[,2:1931], breaks=c(0,0.00000001, 0.0027), color = c("grey50", "firebrick3"), show_rownames = FALSE, show_colnames = FALSE)
 
-# compute prevalence
+# compute prevalence 
 prevalence <- as.data.frame(rowSums(filtered_pathabun>0)/ncol(filtered_pathabun))
 colnames(prevalence) <- "Prevalence"
 prevalence$Pathway <- filtered_pathabun$PWY 
@@ -95,7 +95,49 @@ ggplot(prevalence, aes(reorder(Pathway,-Prevalence), Prevalence)) +
   geom_bar(stat="identity") +
   theme_classic() +
   theme(axis.text.x=element_blank(),
-        axis.ticks.x=element_blank()) +
-  xlab("Pathway")
+        axis.ticks.x=element_blank(),
+        text=element_text(size=16)) +
+  xlab("Pathway") +
+  geom_hline(yintercept = 0.8, linetype=4)
 
+# add controls
+ctrls <- read.csv("huttenhower_ctrls.txt", header=TRUE, sep = "\t")
+prevalence <- left_join(prevalence, ctrls)
+levels <- levels(prevalence$Control)
+levels[length(levels) + 1] <- "n"
+prevalence$Control <- factor(prevalence$Control, levels = levels)
+prevalence[is.na(prevalence)] <- "n"
+
+# plot with controls
+ggplot(prevalence, aes(reorder(Pathway,-Prevalence), Prevalence, fill=Control)) +
+  geom_bar(stat="identity") +
+  theme_classic() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        text=element_text(size=16),
+        legend.position=c(0.8,0.5)) +
+  xlab("Pathway") +
+  scale_fill_manual(values=c("firebrick","goldenrod","dodgerblue","gray40")) +
+  geom_hline(yintercept = 0.8, linetype=4) 
+  
+  
+# compute abundance
+abun <- as.data.frame(rowMeans(filtered_pathabun[,2:1931]))
+colnames(abun) <- "AbundanceMean"
+abun$AbundanceSD <- apply(filtered_pathabun[,2:1931], 1, sd)
+abun$Pathway <- filtered_pathabun$PWY
+prevalence <- left_join(prevalence,abun)
+
+# plot prevalence and abundance
+ggplot(prevalence, aes(Prevalence, AbundanceMean, color=Control)) +
+  geom_point(alpha=0.5) +
+  geom_errorbar(aes(x=Prevalence, ymin=AbundanceMean-AbundanceSD, ymax=AbundanceMean+ AbundanceSD)) +
+  theme_classic() +
+  scale_color_manual(values=c("firebrick","goldenrod","dodgerblue","gray40")) +
+  theme(text=element_text(size=16), legend.position=c(0.7,0.7)) +
+  ylab("Abundance")
+  
+
+####### write cmds for raw data download #######
+write(paste("bash curatedMetagenomicData_pipeline.sh", filtered_metadata$sampleID, filtered_metadata$NCBI_accession), file="download_cmd.txt")
 
